@@ -1,0 +1,96 @@
+#It looks like the error is due to an illegal move being passed to the `san()` function, which expects only legal or null moves to be passed to it. This can happen when the PGN is being written in the output file.
+
+#The issue could be caused by not updating the board position when iterating over the common moves. You should update the board position in the for loop when adding a variation (move).
+
+#Here's the modified version of your code with the suggested change implemented:
+
+#```python
+import chess.pgn
+import io
+
+def load_pgn(filename):
+    def convert_move_notation(line):
+        line = line.lstrip("0123456789. ")
+        move_pairs = line.split(" ")
+        converted_moves = []
+        for i, move in enumerate(move_pairs):
+            if not move:
+                continue
+            move = move.replace(".", "").strip()
+            if i % 2 == 1 and move == "O-O":
+                move = "O-O"
+            elif i % 2 == 0 and move == "O-O":
+                move = "O-O"
+            converted_moves.append(move)
+        return " ".join(converted_moves)
+
+    with open(filename, "r") as pgn_file:
+        converted_pgn_data = ""
+        for line in pgn_file.readlines():
+            if not line.startswith("[") and not line.strip() == "":
+                converted_pgn_data += convert_move_notation(line) + "\n"
+            else:
+                converted_pgn_data += line
+
+        games = []
+        pgn_io = io.StringIO(converted_pgn_data)
+        while True:
+            game = chess.pgn.read_game(pgn_io)
+            if game is None:
+                break
+            games.append(game)
+    return games
+
+def find_common_moves(game1, game2):
+    game1_moves, game2_moves = list(game1.mainline_moves()), list(game2.mainline_moves())
+    max_len = min(len(game1_moves), len(game2_moves))
+    common_moves = []
+
+    for i in range(max_len):
+        if game1_moves[i] == game2_moves[i]:
+            common_moves.append(game1_moves[i])
+        else:
+            break
+
+    return common_moves
+
+def main():
+    pgn_1, pgn_2 = "pgn1.pgn", "pgn2.pgn"
+    output_pgn = "output.pgn"
+    
+    games_pgn1, games_pgn2 = load_pgn(pgn_1), load_pgn(pgn_2)
+
+    new_games = []
+
+    for game1 in games_pgn1:
+        max_common_moves, max_game2 = [], None
+        
+        for game2 in games_pgn2:
+            common_moves = find_common_moves(game1, game2)
+            
+            if len(common_moves) > len(max_common_moves):
+                max_common_moves, max_game2 = common_moves, game2
+
+        if max_common_moves:
+            new_game = chess.pgn.Game()
+            new_game.headers = max_game2.root().headers
+            node = new_game
+            # Added the board position updater
+            board = chess.Board()
+            
+            for move in max_common_moves:
+                board.push(move)
+                node = node.add_variation(move)
+                
+            new_games.append(new_game)
+
+    with open(output_pgn, "w") as output_file:
+        for game in new_games:
+            output_file.write(str(game))
+            output_file.write("\n\n")
+
+if __name__ == "__main__":
+    main()
+#```
+
+#This should resolve your issue. Note that you might need to adjust your input file names and locations to ensure that the program reads the correct files.
